@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tabungan Kelompok</title>
+    <link rel="shortcut icon" href="assets/icon1.png" type="image/x-icon">
+    <link rel="icon" href="assets/icon1.png" type="image/png">
+    <link rel="apple-touch-icon" href="assets/icon1.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><!DOCTYPE html>
+    <style>
+        .sidebar-link.active { background-color: #3b82f6; color: white; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #10b981; }
+        input:checked + .slider:before { transform: translateX(20px); }
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } #sidebar { position: fixed; z-index: 30; height: 100%; } }
+        .cb-custom { width: 20px; height: 20px; cursor: pointer; accent-color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="flex h-screen overflow-hidden relative">
+        <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden"></div>
+        <aside id="sidebar" class="closed md:relative w-64 bg-slate-900 text-white h-full flex-shrink-0 flex flex-col z-30 md:transform-none">
+            <div class="p-6 flex justify-between items-center">
+                <h1 class="text-xl font-bold flex items-center gap-2"><i data-lucide="shield-check" class="text-blue-400"></i><span>Admin Panel</span></h1>
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white p-1"><i data-lucide="x" size="20"></i></button>
+            </div>
+            <nav class="flex-1 px-4 space-y-1 py-2">
+                <button onclick="showTab('stats')" class="sidebar-link active w-full text-left p-3 rounded-lg flex items-center gap-3 transition" id="btn-stats"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button onclick="showTab('users')" class="sidebar-link w-full text-left p-3 rounded-lg flex items-center gap-3 transition" id="btn-users"><i data-lucide="users"></i> Kelola Users</button>
+                <button onclick="showTab('roles')" class="sidebar-link w-full text-left p-3 rounded-lg flex items-center gap-3 transition" id="btn-roles"><i data-lucide="lock"></i> Kelola Hak Akses</button>
+            </nav>
+            <div class="p-4 border-t border-slate-800 text-center"><a href="index.html" class="flex items-center justify-center gap-3 p-3 text-gray-400 hover:text-white transition"><i data-lucide="arrow-left"></i> Kembali ke App</a></div>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-y-auto">
+            <header class="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden p-2 hover:bg-gray-100 rounded-lg"><i data-lucide="menu"></i></button>
+                    <h2 id="tab-title" class="text-lg font-semibold text-gray-800">Dashboard Overview</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="admin-name" class="hidden sm:inline text-gray-600 font-medium text-sm">Superadmin</span>
+                </div>
+            </header>
+
+            <main class="p-4 md:p-6">
+                <!-- TAB STATS -->
+                <section id="tab-stats" class="tab-content">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between"><div><p class="text-gray-500 text-sm">Total Users</p><h3 id="stat-users" class="text-3xl font-bold">0</h3></div><i data-lucide="users" class="text-blue-500"></i></div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between"><div><p class="text-gray-500 text-sm">Total Roles</p><h3 id="stat-roles" class="text-3xl font-bold">0</h3></div><i data-lucide="shield" class="text-purple-500"></i></div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between"><div><p class="text-gray-500 text-sm">Permissions</p><h3 id="stat-perms" class="text-3xl font-bold">0</h3></div><i data-lucide="key" class="text-orange-500"></i></div>
+                    </div>
+                </section>
+
+                <!-- TAB USERS -->
+                <section id="tab-users" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6"><h3 class="font-bold text-lg">Daftar Pengguna</h3><button onclick="openUserModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex gap-2"><i data-lucide="user-plus"></i> Tambah</button></div>
+                    <div class="bg-white rounded-xl shadow-sm border overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-50 border-b"><tr><th class="p-4">Nama</th><th class="p-4">Username</th><th class="p-4">Status</th><th class="p-4">Role</th><th class="p-4 text-right">Aksi</th></tr></thead><tbody id="user-table-body"></tbody></table></div>
+                </section>
+
+                <!-- TAB ROLES -->
+                <section id="tab-roles" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-1 space-y-3"><h3 class="font-bold text-gray-700">Pilih Role</h3><div id="role-list-container" class="space-y-2"></div></div>
+                        <div class="lg:col-span-2">
+                            <div id="permission-panel" class="bg-white rounded-2xl border shadow-sm hidden"><div class="p-4 bg-gray-50 border-b flex justify-between"><h3 id="selected-role-name" class="font-bold uppercase">Role</h3><div id="perm-count-badge" class="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold">0 Akses</div></div><div class="p-6" id="permissions-grid"></div></div>
+                            <div id="perm-placeholder" class="bg-white rounded-2xl border border-dashed p-12 text-center text-gray-400"><i data-lucide="lock" size="32" class="mx-auto mb-4"></i><p>Pilih role untuk kelola hak akses</p></div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL USER (Dipersingkat logic tetap utuh) -->
+    <div id="user-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4"><div class="bg-white rounded-2xl w-full max-w-md p-6"><h3 id="modal-title" class="text-xl font-bold mb-4">Tambah User</h3><form id="user-form" onsubmit="saveUser(event)" class="space-y-4"><input type="hidden" id="edit-id"><input id="user-name" required class="w-full p-3 border rounded-xl" placeholder="Nama Lengkap"><input id="user-username" required class="w-full p-3 border rounded-xl" placeholder="Username"><input type="password" id="user-password" class="w-full p-3 border rounded-xl" placeholder="Password (Kosongi jika edit)"><select id="user-role-select" class="w-full p-3 border rounded-xl"></select><div class="flex gap-3"><button type="button" onclick="closeUserModal()" class="flex-1 py-3 bg-gray-100 rounded-xl">Batal</button><button type="submit" class="flex-1 py-3 bg-blue-600 text-white rounded-xl">Simpan</button></div></form></div></div>
+
+    <script>
+        const API_FILE = 'api.php'; // Mengarah ke api terpusat sekarang
+        let currentUser = JSON.parse(localStorage.getItem('kas_user') || 'null');
+        if (!currentUser || currentUser.role !== 'superadmin') window.location.href = 'dasboard.html';
+
+        document.getElementById('admin-name').innerText = currentUser.full_name;
+
+        async function safeFetch(endpoint, options = {}) {
+            const response = await fetch(endpoint, options);
+            return await response.json();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); initData(); });
+
+        async function initData() { loadDashboard(); loadUsers(); loadRolesList(); }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`btn-${tab}`).classList.add('active');
+        }
+
+        async function loadDashboard() {
+            const data = await safeFetch(`${API_FILE}?action=get_admin_dashboard_stats`);
+            document.getElementById('stat-users').innerText = data.stats.users;
+            document.getElementById('stat-roles').innerText = data.stats.roles;
+            document.getElementById('stat-perms').innerText = data.stats.permissions;
+        }
+
+        async function loadUsers() {
+            const users = await safeFetch(`${API_FILE}?action=get_all_users`);
+            document.getElementById('user-table-body').innerHTML = users.map(u => `
+                <tr class="border-b hover:bg-gray-50"><td class="p-4">${u.full_name}</td><td class="p-4">${u.username}</td>
+                <td class="p-4"><label class="switch"><input type="checkbox" ${u.is_active == 1 ? 'checked' : ''} onchange="toggleUserStatus(${u.id}, this.checked)"><span class="slider"></span></label></td>
+                <td class="p-4"><span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold uppercase">${u.role_name}</span></td>
+                <td class="p-4 text-right"><button onclick='openUserModal(${JSON.stringify(u)})' class="text-blue-600 p-2"><i data-lucide="edit-3"></i></button></td></tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function toggleUserStatus(id, active) { await safeFetch(`${API_FILE}?action=toggle_user_status`, { method:'POST', body: JSON.stringify({id, status: active?1:0}) }); }
+        
+        function openUserModal(user = null) {
+            document.getElementById('user-modal').classList.remove('hidden');
+            document.getElementById('user-form').reset();
+            if(user) {
+                document.getElementById('edit-id').value = user.id;
+                document.getElementById('user-name').value = user.full_name;
+                document.getElementById('user-username').value = user.username;
+                document.getElementById('user-role-select').value = user.role_id;
+            }
+        }
+        function closeUserModal() { document.getElementById('user-modal').classList.add('hidden'); }
+
+        async function saveUser(e) {
+            e.preventDefault();
+            const data = { id: document.getElementById('edit-id').value, full_name: document.getElementById('user-name').value, username: document.getElementById('user-username').value, password: document.getElementById('user-password').value, role_id: document.getElementById('user-role-select').value };
+            const action = data.id ? 'update_user' : 'add_user';
+            await safeFetch(`${API_FILE}?action=${action}`, { method:'POST', body: JSON.stringify(data) });
+            closeUserModal(); loadUsers(); loadDashboard();
+        }
+
+        async function loadRolesList() {
+            const roles = await safeFetch(`${API_FILE}?action=get_all_roles`);
+            document.getElementById('user-role-select').innerHTML = roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+            document.getElementById('role-list-container').innerHTML = roles.map(r => `<button onclick="selectRole(${r.id}, '${r.name}')" class="w-full text-left p-4 rounded-xl border bg-white hover:border-blue-400 font-bold text-gray-800">${r.name}</button>`).join('');
+        }
+
+        let currentRoleId = null;
+        async function selectRole(id, name) {
+            currentRoleId = id;
+            document.getElementById('perm-placeholder').classList.add('hidden');
+            document.getElementById('permission-panel').classList.remove('hidden');
+            document.getElementById('selected-role-name').innerText = name;
+            const allPerms = await safeFetch(`${API_FILE}?action=get_all_permissions`);
+            const activePerms = await safeFetch(`${API_FILE}?action=get_role_permissions&role_id=${id}`);
+            
+            let html = '';
+            for (const [cat, perms] of Object.entries(allPerms)) {
+                html += `<h4 class="text-xs font-bold text-gray-400 mt-4 mb-2">${cat}</h4><div class="grid grid-cols-2 gap-3">`;
+                perms.forEach(p => {
+                    const checked = activePerms.includes(p.id) || activePerms.includes(p.id.toString()) ? 'checked' : '';
+                    html += `<label class="flex justify-between p-3 border rounded-xl items-center"><span>${p.name}</span><input type="checkbox" class="cb-custom" ${checked} onchange="togglePerm(${p.id}, this.checked)"></label>`;
+                });
+                html += `</div>`;
+            }
+            document.getElementById('permissions-grid').innerHTML = html;
+        }
+
+        async function togglePerm(pId, status) {
+            await safeFetch(`${API_FILE}?action=toggle_permission`, { method:'POST', body: JSON.stringify({role_id: currentRoleId, permission_id: pId, status}) });
+        }
+    </script>
+</body>
+</html>

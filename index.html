@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tabungan Kelompok</title>
+    <link rel="shortcut icon" href="assets/icon1.png" type="image/x-icon">
+    <link rel="icon" href="assets/icon1.png" type="image/png">
+    <link rel="apple-touch-icon" href="assets/icon1.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { display: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .line-through-fade { text-decoration: line-through; opacity: 0.5; }
+        .pulse-indigo { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center text-gray-800 h-screen overflow-hidden">
+
+    <script>
+        const API_URL = 'api.php';
+        const userToken = localStorage.getItem('kas_token');
+        const userStored = localStorage.getItem('kas_user');
+
+        if (!userToken || !userStored) {
+            window.location.href = 'login.html';
+        }
+        const currentUser = JSON.parse(userStored);
+    </script>
+
+    <!-- Mobile Container -->
+    <div class="w-full max-w-md bg-gray-50 h-full relative flex flex-col shadow-2xl overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-indigo-600 text-white p-4 shadow-md z-10 flex flex-col gap-1 shrink-0">
+            <div class="flex justify-between items-center">
+                <h1 class="text-lg font-bold">Tabungan Kelompok</h1>
+                <div class="flex items-center gap-2">
+                    <div class="text-xs bg-indigo-500 px-2 py-1 rounded-full font-medium" id="total-group-balance">Rp 0</div>
+                    <button onclick="openSettingsModal()" class="p-2 hover:bg-indigo-700 rounded-lg transition-all">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Subtitle Sambutan & Metrik Performa Bersisian -->
+            <div class="flex justify-between items-start mt-1 gap-2">
+                <div class="text-[10.5px] text-indigo-200 font-medium">
+                    <span id="header-greeting"></span>
+                </div>
+                <!-- Indikator Metrik Performa (Hanya Render) -->
+                <div class="text-[8.5px] text-indigo-200/85 font-mono flex flex-col items-end gap-1 shrink-0">
+                    <span id="perf-render" class="flex items-center gap-1">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Render: -- ms
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto pb-24" id="main-content">
+
+            <!-- MODAL SETTINGS -->
+            <div id="settings-modal" onclick="closeSettingsModal()" class="absolute inset-0 bg-black/60 z-[90] hidden flex justify-center items-center p-4 transition-opacity duration-300">
+                <div onclick="event.stopPropagation()" class="bg-white rounded-2xl w-full max-w-sm shadow-2xl scale-95 transition-transform overflow-hidden flex flex-col max-h-[85vh]" id="settings-modal-content">
+                    <div class="p-5 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                        <h3 class="font-bold text-gray-800">Pengaturan</h3>
+                        <button onclick="closeSettingsModal()" class="text-gray-400"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                    </div>
+                    <div class="p-6 space-y-4 overflow-y-auto" id="settings-list"></div>
+                    <div class="p-4 bg-gray-50 flex justify-between gap-3 shrink-0 border-t">
+                        <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg font-bold">Tutup</button>
+                        <button onclick="handleLogout(this)" class="flex-1 py-2.5 bg-red-600 text-white rounded-lg font-bold">Logout</button>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="file" id="import-excel-file" accept=".xlsx, .xls" class="hidden" onchange="importFullDatabase(event)">
+
+            <!-- Modal Ganti Password -->
+            <div id="change-password-modal" class="absolute inset-0 bg-black/50 z-[99] hidden flex justify-center items-center p-4">
+                <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="change-password-content">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-900">Ubah Password</h3>
+                        <button onclick="closeChangePasswordModal()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                    </div>
+                    <form onsubmit="handleChangePassword(event)" class="space-y-4">
+                        <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Password Lama</label><input type="password" id="input-old-password" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                        <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Password Baru</label><input type="password" id="input-new-password-val" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                        <button type="submit" id="btn-submit-password" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">Simpan Password Baru</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VIEW: BERANDA -->
+            <div id="view-home" class="p-4">
+                <h2 class="font-bold text-gray-700 text-lg mb-4">Saldo Anggota</h2>
+                <div id="member-balance-list"></div>
+            </div>
+
+            <!-- VIEW: ANGGOTA -->
+            <div id="view-members" class="p-4 hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="font-bold text-gray-700 text-lg">Daftar Anggota</h2>
+                        <p class="text-[10px] text-gray-400 font-medium">Kelola anggota & grup</p>
+                    </div>
+                    <button onclick="openAddMemberModal()" class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                </div>
+                <div id="member-manage-list" class="space-y-4"></div>
+            </div>
+
+            <!-- VIEW: TRANSAKSI -->
+            <div id="view-add" class="p-4 hidden">
+                <h2 class="font-bold text-gray-700 text-lg mb-4">Catat Transaksi</h2>
+                <form id="form-transaksi" class="space-y-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100" onsubmit="handleAddTransaction(event)">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Cari Anggota</label>
+                        <input list="member-list" id="input-member-search" placeholder="Ketik nama anggota..." required autocomplete="off" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                        <datalist id="member-list"></datalist>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Transaksi</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="type" id="radio-income" value="income" class="peer sr-only" checked>
+                                <div class="p-3 text-center rounded-xl border border-gray-200 peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700 font-medium">Setor/Masuk (+)</div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="type" id="radio-expense" value="expense" class="peer sr-only">
+                                <div class="p-3 text-center rounded-xl border border-gray-200 peer-checked:bg-red-50 peer-checked:border-red-500 peer-checked:text-red-700 font-medium">Tarik/Keluar (-)</div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Tombol Cepat</label>
+                        <button type="button" onclick="quickAction(5000, 'Uang jajan')" class="flex items-center justify-center gap-2 py-2 px-4 bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-sm font-semibold active:scale-95 transition-transform"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/><path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-5.4a2 2 0 1 0-3-2.7L15 13"/><path d="M5 22h14"/><path d="M18 13h2a2 2 0 1 0 0-4h-2"/><path d="M10 8V5c0-.6-.4-1-1-1H6a1 1 0 0 0-1 1v3"/></svg> Tarik 5rb (Uang Jajan)</button>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nominal (Rp)</label>
+                        <input type="text" inputmode="numeric" id="input-amount" required placeholder="0" oninput="formatCurrencyInput(this)" class="w-full p-3 border border-gray-300 rounded-xl outline-none font-bold text-indigo-600">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="input-desc" required placeholder="Contoh: Bayar kas" class="flex-1 p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                            <button type="button" onclick="openExtraDescModalManual()" id="btn-note-manual" class="p-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 active:scale-95 transition-all relative">
+                                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                <div id="manual-note-indicator" class="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full hidden pulse-indigo"></div>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" id="btn-submit-tx" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl mt-2 active:scale-95 transition-all">Simpan Transaksi</button>
+                </form>
+            </div>
+
+            <!-- VIEW: RIWAYAT GLOBAL -->
+            <div id="view-history" class="p-4 hidden">
+                <h2 class="font-bold text-gray-700 text-lg mb-4">Riwayat Global</h2>
+                <div class="space-y-3" id="history-list"></div>
+            </div>
+
+            <!-- VIEW: CATATAN -->
+            <div id="view-notes" class="p-4 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 class="font-bold text-gray-700 text-lg">Catatan Keperluan</h2>
+                        <p class="text-[10px] text-gray-400 font-medium">Klik kotak untuk checklist, klik isi untuk detail</p>
+                    </div>
+                    <button onclick="openNoteInputModal()" class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                </div>
+                <div class="flex gap-2 mb-4 bg-gray-200 p-1 rounded-xl">
+                    <button id="btn-active-notes" onclick="toggleNotesView(false)" class="flex-1 py-2 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all">Belum Selesai</button>
+                    <button id="btn-completed-notes" onclick="toggleNotesView(true)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all">Riwayat</button>
+                </div>
+                <div id="notes-list" class="space-y-3 pb-10"></div>
+            </div>
+
+            <!-- VIEW: SUPERADMIN DASHBOARD (MANAJEMEN USER) -->
+            <div id="view-admin" class="p-4 hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="font-bold text-gray-700 text-lg">Manajemen User</h2>
+                        <p class="text-[10px] text-gray-400 font-medium">Kontrol Perizinan Bendahara</p>
+                    </div>
+                    <button onclick="openAddUserModal()" class="w-10 h-10 bg-green-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
+                </div>
+                <p class="text-[10px] text-gray-400 mb-3 italic">*Klik pada nama username untuk mengubah info login dan nomor telepon.</p>
+                <div id="admin-user-list" class="space-y-4"></div>
+            </div>
+        </main>
+
+        <!-- Modals for Features -->
+        <div id="add-member-modal" class="absolute inset-0 bg-black/50 z-[70] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="add-member-content">
+                <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold text-gray-900">Tambah Anggota</h3><button onclick="closeAddMemberModal()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+                <form onsubmit="handleAddMember(event)" class="space-y-4">
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nama Lengkap</label><input type="text" id="input-new-member" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grup (Opsional)</label><input type="text" id="input-new-group" list="group-list-options-add" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"><datalist id="group-list-options-add"></datalist></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Alamat (Opsional)</label><input type="text" id="input-new-address" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <button type="submit" id="btn-submit-member" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">Simpan Anggota</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="note-input-modal" class="absolute inset-0 bg-black/50 z-[70] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="note-input-content">
+                <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold text-gray-900">Tambah Catatan</h3><button onclick="closeNoteInputModal()" class="text-gray-400"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+                <form onsubmit="handleAddNote(event)" class="space-y-4">
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Apa yang mau dibeli?</label><input type="text" id="input-note-item" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Keterangan (Opsional)</label><textarea id="input-note-desc" rows="3" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"></textarea></div>
+                    <button type="submit" id="btn-submit-note" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">Simpan Catatan</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="note-detail-modal" class="absolute inset-0 bg-black/50 z-[70] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="note-detail-content">
+                <div class="flex justify-between items-start mb-4"><h3 class="text-lg font-bold text-gray-900">Ubah Catatan</h3><button onclick="closeNoteDetailModal()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+                <div class="space-y-4">
+                    <input type="hidden" id="edit-note-id">
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Judul Keperluan</label><input type="text" id="edit-note-title" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Deskripsi Tambahan</label><textarea id="edit-note-desc" rows="3" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"></textarea></div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="deleteNoteFromModal()" class="p-3 bg-red-50 text-red-600 rounded-xl active:scale-90 transition-transform"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+                        <button id="btn-update-note" onclick="saveNoteEdit()" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold active:scale-95 transition-transform">Simpan Perubahan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Bagikan Anggota -->
+        <div id="share-member-modal" class="absolute inset-0 bg-black/50 z-[75] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="share-member-content">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Bagikan Anggota</h3>
+                    <button onclick="closeShareModal()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <p class="text-xs text-gray-500 mb-4">Pilih user yang dapat melihat & menambahkan transaksi untuk anggota ini:</p>
+                <div id="share-users-list" class="space-y-2 mb-4 max-h-48 overflow-y-auto pr-1">
+                    <!-- List user injeksi via js -->
+                </div>
+                <input type="hidden" id="share-member-id">
+                <div class="flex gap-3">
+                    <button onclick="closeShareModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Batal</button>
+                    <button onclick="saveShareConfig()" id="btn-save-share" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="individual-history-modal" onclick="closeIndividualHistory()" class="absolute inset-0 bg-black/60 z-40 hidden flex flex-col justify-end transition-opacity duration-300">
+            <div onclick="event.stopPropagation()" class="bg-white rounded-t-3xl h-[80%] w-full shadow-2xl flex flex-col overflow-hidden translate-y-full transition-transform duration-300" id="individual-modal-content">
+                <div class="p-5 border-b flex justify-between items-center shrink-0">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 flex items-center" id="modal-member-name">Nama Anggota</h3>
+                        <p class="text-[10px] text-gray-400 font-medium italic">Klik riwayat untuk detail & undo</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-export-excel" class="p-2 bg-green-50 text-green-700 rounded-full active:scale-90 transition-transform" title="Export ke Excel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                        <button id="btn-export-pdf" class="p-2 bg-red-50 text-red-600 rounded-full active:scale-90 transition-transform" title="Export ke PDF"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg></button>
+                        <button onclick="closeIndividualHistory()" class="p-2 bg-gray-100 rounded-full text-gray-500"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" id="individual-history-list"></div>
+            </div>
+        </div>
+
+        <div id="tx-detail-modal" class="absolute inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl scale-95 transition-transform overflow-hidden" id="tx-detail-modal-content">
+                <div class="p-5 border-b flex justify-between items-center bg-gray-50">
+                    <h3 class="font-bold text-gray-800">Rincian Transaksi</h3>
+                    <button onclick="closeTxDetailModal()" class="text-gray-400"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <div class="p-6 space-y-4" id="tx-detail-body"></div>
+                <div class="p-4 bg-gray-50 flex justify-end gap-3">
+                    <button onclick="openEditTxModalFromDetail()" class="flex-1 py-2.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl font-bold text-xs uppercase tracking-wider">Edit</button>
+                    <button onclick="closeTxDetailModal()" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider">Tutup</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="edit-tx-modal" class="absolute inset-0 bg-black/60 z-[60] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl scale-95 transition-transform overflow-hidden" id="edit-tx-modal-content">
+                <div class="p-5 border-b flex justify-between items-center bg-gray-50">
+                    <h3 class="font-bold text-gray-800">Edit Transaksi</h3>
+                    <button onclick="closeEditTxModal()" class="text-gray-400"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <form onsubmit="handleUpdateTx(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="edit-tx-id">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Transaksi</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="edit-tx-type" id="edit-radio-income" value="income" class="peer sr-only">
+                                <div class="p-2 text-sm text-center rounded-xl border border-gray-200 peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700 font-medium">Setor/Masuk (+)</div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="edit-tx-type" id="edit-radio-expense" value="expense" class="peer sr-only">
+                                <div class="p-2 text-sm text-center rounded-xl border border-gray-200 peer-checked:bg-red-50 peer-checked:border-red-500 peer-checked:text-red-700 font-medium">Tarik/Keluar (-)</div>
+                            </label>
+                        </div>
+                    </div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Nominal (Rp)</label><input type="text" inputmode="numeric" id="edit-tx-amount" required oninput="formatCurrencyInput(this)" class="w-full p-3 border border-gray-300 rounded-xl outline-none font-bold text-indigo-600"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Keterangan Utama</label><input type="text" id="edit-tx-desc" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Catatan Tambahan</label><textarea id="edit-tx-extra-desc" rows="2" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></textarea></div>
+                    <div class="flex gap-3 pt-2">
+                        <button type="button" onclick="closeEditTxModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Batal</button>
+                        <button type="submit" id="btn-update-tx" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="edit-member-modal" class="absolute inset-0 bg-black/60 z-50 hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl scale-95 transition-transform overflow-hidden" id="edit-modal-content">
+                <div class="p-5 border-b flex justify-between items-center bg-gray-50"><h3 class="font-bold text-gray-800">Edit Anggota</h3><button onclick="closeEditModal()" class="text-gray-400"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+                <form onsubmit="handleUpdateMember(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="edit-member-id">
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nama Anggota</label><input type="text" id="edit-member-name" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Grup</label><input type="text" id="edit-member-group" list="group-list-options-edit" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"><datalist id="group-list-options-edit"></datalist></div>
+                    <div><label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Alamat</label><input type="text" id="edit-member-address" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                    <div class="flex gap-3 pt-2">
+                        <button type="button" onclick="closeEditModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Batal</button>
+                        <button type="submit" id="btn-update-member" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="delete-modal" class="absolute inset-0 bg-black/50 z-50 hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="delete-modal-content">
+                <h3 class="text-lg font-bold text-gray-900 mb-2">Hapus Anggota?</h3>
+                <p class="text-gray-600 text-sm mb-6">Semua riwayat transaksinya akan dihapus permanen.</p>
+                <div class="flex gap-3">
+                    <button onclick="closeDeleteModal()" class="flex-1 bg-gray-100 text-gray-700 font-medium py-2.5 rounded-xl">Batal</button>
+                    <button id="btn-confirm-delete" class="flex-1 bg-red-600 text-white font-medium py-2.5 rounded-xl">Hapus</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="undo-tx-modal" class="absolute inset-0 bg-black/50 z-[60] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="undo-tx-modal-content">
+                <h3 class="text-lg font-bold text-gray-900 mb-2">Batalkan Transaksi?</h3>
+                <p class="text-gray-600 text-sm mb-6">Hapus transaksi ini dan kembalikan saldo semula?</p>
+                <div class="flex gap-3">
+                    <button onclick="closeUndoTxModal()" class="flex-1 bg-gray-100 text-gray-700 font-medium py-2.5 rounded-xl">Tutup</button>
+                    <button id="btn-confirm-undo-tx" class="flex-1 bg-red-600 text-white font-medium py-2.5 rounded-xl font-bold">Batalkan</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="extra-desc-modal" class="absolute inset-0 bg-black/50 z-[60] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="extra-desc-modal-content">
+                <h3 id="extra-desc-title" class="text-lg font-bold text-red-600 mb-2">Detail Penarikan Besar</h3>
+                <p id="extra-desc-subtitle" class="text-gray-600 text-sm mb-4">Mohon tambahkan rincian untuk penarikan di atas Rp 20.000.</p>
+                <textarea id="input-extra-desc" rows="3" class="w-full p-3 border border-gray-300 rounded-xl outline-none mb-4"></textarea>
+                <div class="flex gap-3">
+                    <button onclick="closeExtraDescModal(false)" class="flex-1 bg-gray-100 text-gray-700 font-medium py-2.5 rounded-xl">Batal</button>
+                    <button onclick="closeExtraDescModal(true)" class="flex-1 bg-indigo-600 text-white font-medium py-2.5 rounded-xl">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="add-user-modal" class="absolute inset-0 bg-black/50 z-[75] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="add-user-content">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Tambah User Baru</h3>
+                    <button onclick="closeAddUserModal()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <form onsubmit="handleAddUser(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Username</label>
+                        <input type="text" id="input-new-username" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Password</label>
+                        <input type="password" id="input-new-password" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nomor Telepon</label>
+                        <input type="text" id="input-new-phone" placeholder="Contoh: 628123456789" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Role</label>
+                        <select id="input-new-role" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            <option value="user">User/Bendahara</option>
+                            <option value="superadmin">Superadmin</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="btn-submit-user" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">Buat User</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Edit Detail User oleh Admin (Username, Password, No Telepon) -->
+        <div id="edit-user-modal-admin" class="absolute inset-0 bg-black/50 z-[75] hidden flex justify-center items-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-95 transition-transform" id="edit-user-content-admin">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Ubah Detail User</h3>
+                    <button onclick="closeEditUserModalAdmin()" class="text-gray-400 p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <form onsubmit="handleUpdateUserDetailAdmin(event)" class="space-y-4">
+                    <input type="hidden" id="edit-user-id-admin">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Username</label>
+                        <input type="text" id="edit-user-username-admin" required class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Password Baru (Kosongkan jika tetap)</label>
+                        <input type="password" id="edit-user-password-admin" placeholder="Masukkan password baru" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nomor Telepon</label>
+                        <input type="text" id="edit-user-phone-admin" placeholder="Contoh: 628123456789" class="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button type="submit" id="btn-submit-edit-user-admin" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">Simpan Perubahan</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="absolute top-16 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-5 py-2.5 rounded-full text-sm opacity-0 transition-opacity pointer-events-none duration-300 z-[99] shadow-lg whitespace-nowrap"></div>
+
+        <!-- Navigation -->
+        <nav class="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around items-center h-16 pb-safe z-20">
+            <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center justify-center w-full h-full text-indigo-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="text-[10px] mt-1 font-medium leading-none">Beranda</span>
+            </button>
+            <button onclick="switchTab('members')" id="tab-members" class="flex flex-col items-center justify-center w-full h-full text-gray-400">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/></svg>
+                <span class="text-[10px] mt-1 font-medium leading-none">Anggota</span>
+            </button>
+            <div class="relative w-full h-full flex justify-center items-center">
+                <button onclick="switchTab('add')" id="tab-add" class="absolute bottom-5 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-[0_8px_15px_rgba(79,70,229,0.4)] ring-[6px] ring-gray-100 active:scale-95 transition-all">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+            </div>
+            <button onclick="switchTab('notes')" id="tab-notes" class="flex flex-col items-center justify-center w-full h-full text-gray-400">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span class="text-[10px] mt-1 font-medium leading-none">Catatan</span>
+            </button>
+            <button onclick="switchTab('history')" id="tab-history" class="flex flex-col items-center justify-center w-full h-full text-gray-400">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="text-[10px] mt-1 font-medium leading-none">Riwayat</span>
+            </button>
+            <button onclick="switchTab('admin')" id="tab-admin" class="hidden flex-col items-center justify-center w-full h-full text-red-500">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="mb-[2px]"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span class="text-[10px] font-bold mt-0.5 leading-none">Admin</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Frontend Logic Javascript -->
+    <script>
+        let appData = { members: [], transactions: [], notes: [], users: [] };
+        let currentViewedMemberId = null;
+        let currentViewedTxId = null;
+        let pendingTx = null;
+        let manualExtraDesc = ""; 
+        let isProcessing = false; 
+        let showingCompletedNotes = false;
+
+        // Cache Element DOM untuk Menghemat Beban CPU & Rendering
+        let elTotalBalance, elHeaderGreeting, elPerfRender, elMemberList, elMemberBalanceList, elMemberManageList, elHistoryList, elNotesList, elAdminUserList;
+        function cacheElements() {
+            elTotalBalance = document.getElementById('total-group-balance');
+            elHeaderGreeting = document.getElementById('header-greeting');
+            elPerfRender = document.getElementById('perf-render');
+            elMemberList = document.getElementById('member-list');
+            elMemberBalanceList = document.getElementById('member-balance-list');
+            elMemberManageList = document.getElementById('member-manage-list');
+            elHistoryList = document.getElementById('history-list');
+            elNotesList = document.getElementById('notes-list');
+            elAdminUserList = document.getElementById('admin-user-list');
+        }
+
+        function updateHeaderGreeting() {
+            if(elHeaderGreeting) {
+                elHeaderGreeting.innerHTML = `Selamat datang, <strong>${currentUser.username}</strong> telp ${currentUser.phone || '-'}`;
+            }
+        }
+
+        async function fetchAPI(url, options = {}) {
+            const token = localStorage.getItem('kas_token');
+            if (token) {
+                if (!options.headers) options.headers = {};
+                options.headers['Authorization'] = `Bearer ${token}`;
+            }
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                showToast("Sesi kedaluwarsa. Silakan login kembali");
+                localStorage.clear();
+                setTimeout(() => window.location.href = 'login.html', 1500);
+                throw new Error("Unauthorized");
+            }
+            return res;
+        }
+
+        const parseSafeDate = (ds) => {
+            if (!ds) return new Date();
+            if (typeof ds === 'string') return new Date(ds.replace(' ', 'T'));
+            return new Date(ds);
+        };
+
+        const formatRupiah = (a) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(a);
+        const formatRupiahMurni = (a) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(a);
+        const formatDate = (ds) => parseSafeDate(ds).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
+        const formatFull = (ds) => parseSafeDate(ds).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute:'2-digit' });
+        const getMonthYear = (ds) => parseSafeDate(ds).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+        function formatCurrencyInput(el) {
+            let value = el.value.replace(/[^0-9]/g, '');
+            if (value === "") { el.value = ""; return; }
+            el.value = new Intl.NumberFormat('id-ID').format(parseInt(value));
+        }
+
+        if (currentUser && currentUser.role === 'superadmin') {
+            const tabAdmin = document.getElementById('tab-admin');
+            if (tabAdmin) {
+                tabAdmin.classList.replace('hidden', 'flex');
+            }
+        }
+
+        async function loadData() {
+            const startTime = performance.now(); // Start render metrics stopwatch
+            try {
+                const res = await fetchAPI(`${API_URL}?action=get_all`);
+                const newData = await res.json();
+                
+                // Mencegah crash pembacaan data dengan menyuntikkan fallback array kosong
+                appData.members = newData.members || [];
+                appData.transactions = newData.transactions || [];
+                appData.notes = newData.notes || [];
+                appData.users = newData.users || [];
+                
+                if(appData.users && appData.users.length > 0) {
+                    const myUser = appData.users.find(u => u.username === currentUser.username);
+                    if(myUser) {
+                        localStorage.setItem('kas_user', JSON.stringify({...currentUser, ...myUser}));
+                        Object.assign(currentUser, myUser);
+                    }
+                }
+            } catch (e) { 
+                console.warn("API/Offline mode aktif."); 
+                // Set fallback default agar render UI tetap berjalan aman
+                appData.members = appData.members || [];
+                appData.transactions = appData.transactions || [];
+                appData.notes = appData.notes || [];
+                appData.users = appData.users || [];
+            }
+            
+            updateHeaderGreeting();
+            renderApp();
+            renderNotes();
+            renderUsers();
+            if(currentViewedMemberId) refreshIndividualHistoryList(currentViewedMemberId);
+
+            // Hitung total Render Time (Kecepatan IO dan DOM Rendering)
+            const endTime = performance.now();
+            const duration = (endTime - startTime).toFixed(1);
+            if (elPerfRender) {
+                elPerfRender.innerHTML = `
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Render: ${duration}ms
+                `;
+            }
+        }
+
+        // Sinkronisasi Latar Belakang (Optimasi Polling Senyap)
+        setInterval(async () => {
+            if(isProcessing) return; 
+            try {
+                const res = await fetchAPI(`${API_URL}?action=get_all`);
+                const newData = await res.json();
+                
+                const safeMembers = newData.members || [];
+                const safeTxs = newData.transactions || [];
+                const safeNotes = newData.notes || [];
+                const safeUsers = newData.users || [];
+
+                // Pembandingan aman panjang array untuk efisiensi render
+                const hasChanged = 
+                    appData.members.length !== safeMembers.length ||
+                    appData.transactions.length !== safeTxs.length ||
+                    appData.notes.length !== safeNotes.length ||
+                    appData.users.length !== safeUsers.length ||
+                    JSON.stringify(appData.members) !== JSON.stringify(safeMembers) ||
+                    JSON.stringify(appData.transactions) !== JSON.stringify(safeTxs) ||
+                    JSON.stringify(appData.notes) !== JSON.stringify(safeNotes) ||
+                    JSON.stringify(appData.users) !== JSON.stringify(safeUsers);
+
+                if(hasChanged) {
+                    appData.members = safeMembers;
+                    appData.transactions = safeTxs;
+                    appData.notes = safeNotes;
+                    appData.users = safeUsers;
+
+                    if(appData.users && appData.users.length > 0) {
+                        const myUser = appData.users.find(u => u.username === currentUser.username);
+                        if(myUser) {
+                            localStorage.setItem('kas_user', JSON.stringify({...currentUser, ...myUser}));
+                            Object.assign(currentUser, myUser);
+                            updateHeaderGreeting();
+                        }
+                    }
+                    const startPollRender = performance.now();
+                    renderApp();
+                    renderNotes();
+                    renderUsers();
+                    if(currentViewedMemberId) refreshIndividualHistoryList(currentViewedMemberId);
+                    
+                    const endPollRender = performance.now();
+                    if (elPerfRender) {
+                        elPerfRender.innerHTML = `
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Render: ${(endPollRender - startPollRender).toFixed(1)}ms
+                        `;
+                    }
+                }
+            } catch(e) {}
+        }, 3000);
+
+        function getMemberBalance(mid) {
+            return (appData.transactions || [])
+                .filter(t => t.member_id == mid)
+                .reduce((acc, t) => acc + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0);
+        }
+
+        function renderApp() {
+            const members = appData.members || [];
+            const transactions = appData.transactions || [];
+            
+            const groups = {};
+            members.forEach(m => {
+                const gName = m.group_name || 'Tanpa Grup';
+                if(!groups[gName]) groups[gName] = [];
+                groups[gName].push(m);
+            });
+
+            const sortedGroupNames = Object.keys(groups).filter(name => name !== 'Tanpa Grup').sort();
+            const optionsHTML = sortedGroupNames.map(name => `<option value="${name}">`).join('');
+            
+            const datalistAdd = document.getElementById('group-list-options-add');
+            if(datalistAdd) datalistAdd.innerHTML = optionsHTML;
+            const datalistEdit = document.getElementById('group-list-options-edit');
+            if(datalistEdit) datalistEdit.innerHTML = optionsHTML;
+
+            const sortedGroups = Object.keys(groups).sort((a,b) => {
+                if(a === 'Tanpa Grup') return 1;
+                if(b === 'Tanpa Grup') return -1;
+                return a.localeCompare(b);
+            });
+
+            let total = 0;
+            transactions.forEach(t => {
+                const amt = Number(t.amount);
+                if (t.type === 'income') total += amt;
+                else total -= amt;
+            });
+            if (elTotalBalance) elTotalBalance.textContent = formatRupiah(total);
+
+            if(!elMemberBalanceList) return;
+            elMemberBalanceList.innerHTML = '';
+            
+            if (members.length === 0) {
+                elMemberBalanceList.innerHTML = `<div class="text-center p-6 bg-white rounded-2xl shadow-sm border border-gray-100"><p class="text-gray-500 text-sm">Belum ada anggota.</p></div>`;
+            }
+
+            sortedGroups.forEach(gName => {
+                let groupHTML = `<div class="mb-5"><h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2 pl-1 flex items-center gap-2"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>${gName}</h3><div class="space-y-3">`;
+                groups[gName].forEach(m => {
+                    const b = getMemberBalance(m.id);
+                    const isMinus = b < 0;
+                    const boxClass = isMinus ? "bg-red-50 border-red-200 active:bg-red-100" : "bg-white border-gray-100 active:bg-gray-50";
+                    groupHTML += `
+                        <div class="${boxClass} p-4 rounded-2xl shadow-sm border flex justify-between items-center transition-colors cursor-pointer active:scale-[0.98]" onclick="openIndividualHistory(${m.id})">
+                            <div class="flex items-center gap-3 truncate">
+                                <div class="w-10 h-10 rounded-full ${isMinus ? 'bg-red-200 text-red-700' : 'bg-indigo-100 text-indigo-600'} flex items-center justify-center font-bold text-lg shrink-0">${m.name[0].toUpperCase()}</div>
+                                <div class="truncate">
+                                    <h3 class="font-bold text-gray-800 truncate text-sm">${m.name}</h3>
+                                    <p class="text-[9px] text-gray-400 font-medium truncate">${m.address || 'Alamat belum diatur'}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <p class="font-bold text-sm ${isMinus ? 'text-red-600' : 'text-gray-800'}">${formatRupiah(Math.abs(b))}${isMinus ? ' (-)' : ''}</p>
+                                <button onclick="event.stopPropagation(); goToTx(${m.id})" class="p-2 ${isMinus ? 'bg-red-100 text-red-700 border-red-200' : 'bg-indigo-50 text-indigo-600 border-indigo-100'} rounded-xl border active:scale-95 transition-transform"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></button>
+                            </div>
+                        </div>`;
+                });
+                groupHTML += `</div></div>`;
+                elMemberBalanceList.innerHTML += groupHTML;
+            });
+
+            if(elMemberList) {
+                elMemberList.innerHTML = '';
+                members.forEach(m => elMemberList.innerHTML += `<option value="${m.name}, ${m.address || 'Alamat belum diatur'}">Grup: ${m.group_name || 'Tanpa Grup'}</option>`);
+            }
+
+            if(elMemberManageList) {
+                elMemberManageList.innerHTML = '';
+                sortedGroups.forEach(gName => {
+                    let mHtml = `<div class="mb-4"><h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">${gName}</h3><div class="space-y-2">`;
+                    groups[gName].forEach(m => {
+                        let actionButtons = '';
+                        if (m.is_shared == 1) {
+                            actionButtons = `<span class="text-[9px] text-red-500 font-bold italic bg-red-50 px-2 py-1 rounded">Dibagikan admin</span>`;
+                        } else {
+                            let shareBtn = '';
+                            if (currentUser.role === 'superadmin') {
+                                shareBtn = `<button onclick="openShareModal(${m.id})" class="text-green-500 p-2 active:bg-green-50 rounded-lg" title="Bagikan Anggota"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>`;
+                            }
+                            actionButtons = `
+                                <div class="flex gap-1 items-center">
+                                    ${shareBtn}
+                                    <button onclick="openEditModal(${m.id})" class="text-indigo-500 p-2 active:bg-indigo-50 rounded-lg" title="Edit Anggota"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                    <button onclick="openDeleteModal(${m.id})" class="text-red-400 p-2 active:bg-red-50 rounded-lg" title="Hapus Anggota"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+                                </div>
+                            `;
+                        }
+
+                        mHtml += `
+                            <div class="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center shadow-sm">
+                                <span class="font-medium text-gray-700 text-sm">${m.name}</span>
+                                ${actionButtons}
+                            </div>`;
+                    });
+                    mHtml += `</div></div>`;
+                    elMemberManageList.innerHTML += mHtml;
+                });
+            }
+
+            if(elHistoryList) {
+                elHistoryList.innerHTML = '';
+                if (transactions.length === 0) {
+                    elHistoryList.innerHTML = `<p class="text-gray-400 text-xs italic text-center py-10">Belum ada riwayat transaksi.</p>`;
+                } else {
+                    [...transactions].sort((a,b) => parseSafeDate(b.date) - parseSafeDate(a.date)).forEach(t => {
+                        const m = members.find(x => x.id == t.member_id);
+                        elHistoryList.innerHTML += createHistoryRow(t, m ? m.name : 'Anggota Dihapus', false);
+                    });
+                }
+            }
+        }
+
+        function createHistoryRow(t, sub, isIndiv, runningBalance = null) {
+            const isPlus = t.type === 'income';
+            const detailText = isIndiv ? formatDate(t.date) : `${sub} • ${formatDate(t.date)}`;
+            const displayDesc = t.description.split(' [!] ')[0];
+            const hasExtra = t.description.includes(' [!] ');
+            const undoBtn = isIndiv ? `<button onclick="event.stopPropagation(); openUndoTxModal('${t.id}')" class="p-2 bg-red-50 text-red-400 rounded-lg shrink-0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>` : '';
+            const balanceHTML = (isIndiv && runningBalance !== null) ? `<p class="text-[9px] text-gray-500 font-medium mt-0.5">Saldo: ${formatRupiah(runningBalance)}</p>` : '';
+            
+            return `<div onclick="openTxDetailModal('${t.id}')" class="bg-white p-3 rounded-xl border border-gray-100 flex items-center justify-between active:scale-[0.98] cursor-pointer">
+                <div class="flex items-center gap-3 truncate pr-2">
+                    <div class="${isPlus ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} p-2 rounded-full shrink-0"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3">${isPlus ? '<path d="M12 19V5M5 12l7-7 7 7"/>' : '<path d="M12 5v14M5 12l7 7 7-7"/>'}</svg></div>
+                    <div class="truncate">
+                        <div class="flex items-center gap-1"><h4 class="font-bold text-gray-800 text-xs truncate uppercase tracking-tighter">${displayDesc}</h4>${hasExtra ? '<div class="w-1.5 h-1.5 bg-indigo-400 rounded-full shrink-0"></div>' : ''}</div>
+                        <p class="text-[10px] text-gray-400 font-medium truncate">${detailText}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="text-right">
+                        <p class="font-black text-xs ${isPlus ? 'text-green-600' : 'text-red-600'}">${isPlus ? '+' : '-'}${formatRupiah(t.amount)}</p>
+                        ${balanceHTML}
+                    </div>
+                    ${undoBtn}
+                </div>
+            </div>`;
+        }
+
+        // --- RIWAYAT & EXPORT INDIVIDUAL ---
+        function openIndividualHistory(mid) {
+            currentViewedMemberId = mid;
+            const m = (appData.members || []).find(x => x.id == mid);
+            if (!m) return;
+            
+            let sharedText = m.is_shared == 1 ? `<span class="text-[9px] text-red-500 font-bold italic bg-red-50 px-2 py-0.5 rounded uppercase ml-2 align-middle">Dibagikan admin</span>` : '';
+            document.getElementById('modal-member-name').innerHTML = m.name + sharedText;
+
+            const btnPdf = document.getElementById('btn-export-pdf');
+            if (btnPdf) btnPdf.onclick = (e) => { e.stopPropagation(); exportMemberToPDF(mid); };
+            const btnExcel = document.getElementById('btn-export-excel');
+            if (btnExcel) btnExcel.onclick = (e) => { e.stopPropagation(); exportMemberToExcel(mid); };
+            refreshIndividualHistoryList(mid);
+            const modal = document.getElementById('individual-history-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => document.getElementById('individual-modal-content').classList.remove('translate-y-full'), 10);
+        }
+
+        function closeIndividualHistory() { 
+            document.getElementById('individual-modal-content').classList.add('translate-y-full'); 
+            setTimeout(() => { document.getElementById('individual-history-modal').classList.add('hidden'); currentViewedMemberId = null; }, 300); 
+        }
+
+        function refreshIndividualHistoryList(mid) {
+            const list = document.getElementById('individual-history-list');
+            if(!list) return;
+            list.innerHTML = '';
+            let txs = (appData.transactions || []).filter(t => t.member_id == mid).sort((a,b) => parseSafeDate(a.date) - parseSafeDate(b.date));
+            let currentBalance = 0;
+            txs = txs.map(t => {
+                if (t.type === 'income') currentBalance += Number(t.amount);
+                else currentBalance -= Number(t.amount);
+                return { ...t, runningBalance: currentBalance };
+            });
+            txs.sort((a,b) => parseSafeDate(b.date) - parseSafeDate(a.date));
+            txs.forEach(t => list.innerHTML += createHistoryRow(t, null, true, t.runningBalance));
+        }
+
+        async function exportMemberToPDF(mid) {
+            try {
+                if (!window.jspdf || !window.jspdf.jsPDF) return showToast("Library PDF belum siap, coba lagi...");
+                const { jsPDF } = window.jspdf;
+                const m = (appData.members || []).find(x => x.id == mid);
+                if (!m) return;
+                showToast("Memproses laporan PDF...");
+                const doc = new jsPDF();
+                const pageWidth = doc.internal.pageSize.width;
+                let txs = (appData.transactions || []).filter(t => t.member_id == mid).sort((a,b) => parseSafeDate(a.date) - parseSafeDate(b.date));
+                doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.text("LAPORAN KAS ANGGOTA", pageWidth / 2, 15, { align: "center" });
+                doc.setFontSize(10); doc.setFont("helvetica", "normal");
+                doc.text(`Nama Anggota: ${m.name}`, 14, 25);
+                doc.text(`Grup: ${m.group_name || 'Tanpa Grup'}`, 14, 30);
+                doc.text(`Dicetak Pada: ${new Date().toLocaleString('id-ID')}`, 14, 35);
+                let currentBalance = 0; const tableRows = []; let lastMonth = '';
+                if (txs.length === 0) tableRows.push([{ content: 'Belum ada transaksi.', colSpan: 5, styles: { halign: 'center' } }]);
+                else {
+                    txs.forEach(t => {
+                        const month = getMonthYear(t.date);
+                        if (month !== lastMonth) {
+                            if (lastMonth !== '') tableRows.push([{ content: '', colSpan: 5, styles: { minCellHeight: 6, fillColor: [255, 255, 255] } }]);
+                            tableRows.push([{ content: month.toUpperCase(), colSpan: 5, styles: { fillColor: [240, 243, 255], fontStyle: 'bold', halign: 'center', textColor: [79, 70, 229] } }]);
+                            lastMonth = month;
+                        }
+                        const amt = Number(t.amount);
+                        if (t.type === 'income') currentBalance += amt; else currentBalance -= amt;
+                        const descParts = t.description.split(' [!] ');
+                        tableRows.push([
+                            parseSafeDate(t.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+                            descParts[0] + (descParts[1] ? `\nCatatan: ${descParts[1]}` : ''),
+                            t.type === 'income' ? formatRupiahMurni(amt) : '-',
+                            t.type === 'expense' ? formatRupiahMurni(amt) : '-',
+                            formatRupiahMurni(currentBalance)
+                        ]);
+                    });
+                }
+                doc.autoTable({ startY: 45, head: [['Tgl', 'Keterangan', 'Masuk', 'Keluar', 'Saldo']], body: tableRows, headStyles: { fillColor: [79, 70, 229] }, styles: { fontSize: 8, font: 'helvetica', cellPadding: 3 }, columnStyles: { 1: { cellWidth: 70 } }, theme: 'grid' });
+                doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(`TOTAL SALDO AKHIR: ${formatRupiah(currentBalance)}`, pageWidth - 14, doc.lastAutoTable.finalY + 10, { align: "right" });
+                doc.save(`Laporan_Kas_${m.name.replace(/\s+/g, '_')}.pdf`);
+                showToast("PDF berhasil diunduh");
+            } catch (err) { showToast("Gagal membuat PDF"); }
+        }
+
+        function exportMemberToExcel(mid) {
+            const m = (appData.members || []).find(x => x.id == mid);
+            if (!m) return;
+            let txs = (appData.transactions || []).filter(t => t.member_id == mid).sort((a,b) => parseSafeDate(a.date) - parseSafeDate(b.date));
+            let data = []; let currentBalance = 0;
+            txs.forEach(t => {
+                const isIncome = t.type === 'income';
+                if(isIncome) currentBalance += Number(t.amount); else currentBalance -= Number(t.amount);
+                const descParts = t.description.split(' [!] ');
+                data.push({ 'Tanggal': parseSafeDate(t.date).toLocaleString('id-ID'), 'Keterangan': descParts[0], 'Tipe': isIncome ? "MASUK" : "KELUAR", 'Nominal (Rp)': Number(t.amount), 'Keterangan Tambahan': descParts[1] || '', 'Saldo Berjalan (Rp)': currentBalance });
+            });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Riwayat Kas");
+            XLSX.writeFile(wb, `Riwayat_Kas_${m.name.replace(/\s+/g, '_')}.xlsx`);
+            showToast("Riwayat Excel berhasil diunduh");
+        }
+
+        // --- MANAGE CRUD ACTIONS ---
+        function openEditModal(id) {
+            const m = (appData.members || []).find(x => x.id == id);
+            if(!m) return;
+            document.getElementById('edit-member-id').value = m.id;
+            document.getElementById('edit-member-name').value = m.name;
+            document.getElementById('edit-member-group').value = m.group_name === 'Tanpa Grup' ? '' : m.group_name;
+            document.getElementById('edit-member-address').value = m.address || '';
+            document.getElementById('edit-member-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('edit-modal-content').classList.remove('scale-95'), 10);
+        }
+        function closeEditModal() { document.getElementById('edit-modal-content').classList.add('scale-95'); setTimeout(() => document.getElementById('edit-member-modal').classList.add('hidden'), 150); }
+        
+        async function handleUpdateMember(e) {
+            e.preventDefault();
+            if(isProcessing) return;
+            const id = document.getElementById('edit-member-id').value;
+            const name = document.getElementById('edit-member-name').value.trim();
+            const group_name = document.getElementById('edit-member-group').value.trim() || 'Tanpa Grup';
+            const address = document.getElementById('edit-member-address').value.trim();
+            if(!name) return;
+            if((appData.members || []).some(m => m.name.toLowerCase() === name.toLowerCase() && m.id != id)) { alert("Nama anggota sudah ada!"); return; }
+
+            const btn = document.getElementById('btn-update-member');
+            btn.innerText = "Menyimpan..."; btn.disabled = true; isProcessing = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=update_member`, { method: 'POST', body: JSON.stringify({ id, name, group_name, address }) });
+                const r = await res.json();
+                if(r.status === 'success') { closeEditModal(); showToast("Data anggota berhasil diubah!"); await loadData(); } else { showToast(r.message); }
+            } catch(e) { showToast("Gagal update"); }
+            finally { btn.innerText = "Simpan"; btn.disabled = false; isProcessing = false; }
+        }
+
+        function openAddMemberModal() { document.getElementById('add-member-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('add-member-content').classList.remove('scale-95'), 10); }
+        function closeAddMemberModal() { document.getElementById('add-member-content').classList.add('scale-95'); setTimeout(() => document.getElementById('add-member-modal').classList.add('hidden'), 150); }
+
+        async function handleAddMember(e) { 
+            e.preventDefault(); 
+            if(isProcessing) return;
+            const name = document.getElementById('input-new-member').value.trim(); 
+            const group_name = document.getElementById('input-new-group').value.trim() || 'Tanpa Grup';
+            const address = document.getElementById('input-new-address').value.trim();
+            if(!name) return;
+            if((appData.members || []).some(m => m.name.toLowerCase() === name.toLowerCase())) { alert("Nama anggota sudah ada!"); return; }
+            
+            const btn = document.getElementById('btn-submit-member');
+            btn.innerText = "Menyimpan..."; btn.disabled = true; isProcessing = true;
+            try { 
+                const res = await fetchAPI(`${API_URL}?action=add_member`, { method: 'POST', body: JSON.stringify({ name, group_name, address }) }); 
+                const r = await res.json();
+                if(r.status === 'success') {
+                    document.getElementById('input-new-member').value = ''; document.getElementById('input-new-group').value = ''; document.getElementById('input-new-address').value = ''; 
+                    closeAddMemberModal(); showToast("Data anggota baru berhasil ditambahkan!"); await loadData(); 
+                } else { showToast(r.message); }
+            } catch (err) { showToast("Gagal menyimpan anggota"); } 
+            finally { btn.innerText = "Simpan Anggota"; btn.disabled = false; isProcessing = false; }
+        }
+
+        // --- FUNGSI SHARE MEMBER (SUPERADMIN) ---
+        async function openShareModal(memberId) {
+            document.getElementById('share-member-id').value = memberId;
+            const list = document.getElementById('share-users-list');
+            list.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">Memuat...</p>';
+            
+            document.getElementById('share-member-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('share-member-content').classList.remove('scale-95'), 10);
+
+            try {
+                const res = await fetchAPI(`${API_URL}?action=get_member_shares`, {
+                    method: 'POST',
+                    body: JSON.stringify({ member_id: memberId })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    list.innerHTML = '';
+                    if (data.users.length === 0) {
+                        list.innerHTML = '<p class="text-xs text-gray-500 italic">Tidak ada user lain.</p>';
+                    } else {
+                        data.users.forEach(u => {
+                            list.innerHTML += `
+                                <label class="flex items-center p-3 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <input type="checkbox" value="${u.id}" class="share-user-checkbox w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" ${u.is_shared == 1 ? 'checked' : ''}>
+                                    <span class="ml-3 text-sm font-medium text-gray-700">@${u.username}</span>
+                                </label>
+                            `;
+                        });
+                    }
+                }
+            } catch(e) {
+                list.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Gagal memuat data.</p>';
+            }
+        }
+
+        function closeShareModal() {
+            document.getElementById('share-member-content').classList.add('scale-95');
+            setTimeout(() => document.getElementById('share-member-modal').classList.add('hidden'), 150);
+        }
+
+        async function saveShareConfig() {
+            if (isProcessing) return;
+            const memberId = document.getElementById('share-member-id').value;
+            const checkboxes = document.querySelectorAll('.share-user-checkbox:checked');
+            const shared_user_ids = Array.from(checkboxes).map(cb => cb.value);
+
+            isProcessing = true;
+            const btn = document.getElementById('btn-save-share');
+            btn.innerText = "Menyimpan...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetchAPI(`${API_URL}?action=save_member_shares`, {
+                    method: 'POST',
+                    body: JSON.stringify({ member_id: memberId, shared_user_ids })
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    showToast("Pengaturan bagikan disimpan");
+                    closeShareModal();
+                    await loadData();
+                } else {
+                    showToast(result.message || "Gagal menyimpan");
+                }
+            } catch(e) {
+                showToast("Terjadi kesalahan sistem");
+            } finally {
+                isProcessing = false;
+                btn.innerText = "Simpan";
+                btn.disabled = false;
+            }
+        }
+
+        function openDeleteModal(id) { 
+            document.getElementById('delete-modal').classList.remove('hidden'); 
+            document.getElementById('btn-confirm-delete').onclick = async function() { 
+                if(isProcessing) return;
+                isProcessing = true; this.innerText = "Memproses..."; this.disabled = true;
+                try{ 
+                    const res = await fetchAPI(`${API_URL}?action=delete_member`, { method: 'POST', body: JSON.stringify({ id }) }); 
+                    const r = await res.json();
+                    if(r.status === 'success') { showToast("Data anggota berhasil dihapus!"); } else { showToast(r.message); }
+                } catch(e){} 
+                closeDeleteModal(); await loadData(); 
+                this.innerText = "Hapus"; this.disabled = false; isProcessing = false;
+            }; 
+        }
+        function closeDeleteModal() { document.getElementById('delete-modal').classList.add('hidden'); }
+        
+        function openUndoTxModal(id) { 
+            document.getElementById('undo-tx-modal').classList.remove('hidden'); 
+            document.getElementById('btn-confirm-undo-tx').onclick = async function() { 
+                if(isProcessing) return;
+                isProcessing = true; this.innerText = "Memproses..."; this.disabled = true;
+                try{ 
+                    const res = await fetchAPI(`${API_URL}?action=delete_transaction`, { method: 'POST', body: JSON.stringify({ id }) }); 
+                    const r = await res.json();
+                    if(r.status === 'success') showToast("Data transaksi berhasil dihapus!"); else showToast(r.message);
+                } catch(e){} 
+                closeUndoTxModal(); await loadData(); 
+                this.innerText = "Batalkan"; this.disabled = false; isProcessing = false;
+            }; 
+        }
+        function closeUndoTxModal() { document.getElementById('undo-tx-modal').classList.add('hidden'); }
+        
+        function openTxDetailModal(tid) {
+            currentViewedTxId = tid;
+            const t = (appData.transactions || []).find(x => x.id == tid);
+            if(!t) return;
+            const m = (appData.members || []).find(x => x.id == t.member_id);
+            const isPlus = t.type === 'income';
+            const parts = t.description.split(' [!] ');
+            
+            document.getElementById('tx-detail-body').innerHTML = `
+                <div class="text-center">
+                    <div class="inline-block ${isPlus ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 tracking-widest">${isPlus ? 'Masuk' : 'Keluar'}</div>
+                    <h2 class="text-3xl font-black ${isPlus ? 'text-green-600' : 'text-red-600'}">${isPlus ? '+' : '-'}${formatRupiah(t.amount)}</h2>
+                </div>
+                <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs">
+                    <div class="flex justify-between"><span class="text-gray-400 font-bold uppercase tracking-tighter">Anggota</span><span class="font-bold text-gray-800">${m ? m.name : 'Dihapus'}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400 font-bold uppercase tracking-tighter">Waktu</span><span class="font-medium text-gray-600">${formatFull(t.date)}</span></div>
+                    <div class="border-t pt-3 mt-3"><span class="text-[9px] text-gray-400 font-black uppercase block mb-1">Keterangan Utama</span><p class="font-bold text-gray-800 leading-relaxed text-sm">${parts[0]}</p></div>
+                    ${parts[1] ? `<div class="bg-white p-3 rounded-lg border border-indigo-50 mt-2"><span class="text-[9px] text-indigo-400 font-black uppercase block mb-1">Rincian Tambahan</span><p class="text-gray-700 italic leading-relaxed text-xs">"${parts[1]}"</p></div>` : ''}
+                </div>`;
+            document.getElementById('tx-detail-modal').classList.remove('hidden');
+        }
+        function closeTxDetailModal() { document.getElementById('tx-detail-modal').classList.add('hidden'); }
+        
+        function openEditTxModalFromDetail() {
+            closeTxDetailModal();
+            const t = (appData.transactions || []).find(x => x.id == currentViewedTxId);
+            if(!t) return;
+            
+            document.getElementById('edit-tx-id').value = t.id;
+            if(t.type === 'income') document.getElementById('edit-radio-income').checked = true;
+            else document.getElementById('edit-radio-expense').checked = true;
+            
+            const amtEl = document.getElementById('edit-tx-amount');
+            amtEl.value = t.amount; formatCurrencyInput(amtEl);
+            
+            const parts = t.description.split(' [!] ');
+            document.getElementById('edit-tx-desc').value = parts[0] || '';
+            document.getElementById('edit-tx-extra-desc').value = parts[1] || '';
+            
+            document.getElementById('edit-tx-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('edit-tx-modal-content').classList.remove('scale-95'), 10);
+        }
+        function closeEditTxModal() { document.getElementById('edit-tx-modal-content').classList.add('scale-95'); setTimeout(() => document.getElementById('edit-tx-modal').classList.add('hidden'), 150); }
+
+        async function handleUpdateTx(e) {
+            e.preventDefault();
+            if(isProcessing) return;
+            const id = document.getElementById('edit-tx-id').value;
+            const type = document.querySelector('input[name="edit-tx-type"]:checked').value;
+            const amt = parseInt(document.getElementById('edit-tx-amount').value.replace(/[^0-9]/g, ''));
+            const basicDesc = document.getElementById('edit-tx-desc').value.trim();
+            const extraDesc = document.getElementById('edit-tx-extra-desc').value.trim();
+            if(isNaN(amt) || amt <= 0 || !basicDesc) return showToast("Data tidak lengkap!");
+            
+            let finalDesc = basicDesc; if(extraDesc) finalDesc += ` [!] ${extraDesc}`;
+            
+            isProcessing = true; const btn = document.getElementById('btn-update-tx');
+            btn.innerText = "Menyimpan..."; btn.disabled = true;
+
+            try {
+                const res = await fetchAPI(`${API_URL}?action=update_transaction`, { method: 'POST', body: JSON.stringify({ id, type, amount: amt, description: finalDesc }) });
+                const r = await res.json();
+                if (r.status === 'success') { closeEditTxModal(); showToast("Data transaksi berhasil diedit!"); await loadData(); } else { showToast(r.message); }
+            } catch(e) { showToast("Gagal update transaksi"); } 
+            finally { btn.innerText = "Simpan"; btn.disabled = false; isProcessing = false; }
+        }
+
+        function openExtraDescModalManual() { document.getElementById('extra-desc-title').textContent = "Detail Tambahan"; document.getElementById('input-extra-desc').value = manualExtraDesc; document.getElementById('extra-desc-modal').classList.remove('hidden'); }
+        function closeExtraDescModal(save) { 
+            if(save) { manualExtraDesc = document.getElementById('input-extra-desc').value.trim(); const ind = document.getElementById('manual-note-indicator'); if(manualExtraDesc) ind.classList.remove('hidden'); else ind.classList.add('hidden'); } 
+            document.getElementById('extra-desc-modal').classList.add('hidden'); 
+            if(pendingTx) { if(save) { const ex = document.getElementById('input-extra-desc').value.trim(); if(ex) pendingTx.description += ` [!] ${ex}`; submitTx(pendingTx); } else { pendingTx = null; } } 
+        }
+
+        async function handleAddTransaction(e) {
+            e.preventDefault();
+            if(isProcessing) return;
+
+            const rawInput = document.getElementById('input-member-search').value.trim();
+            const memberName = rawInput.split(',')[0].trim();
+            const memberObj = (appData.members || []).find(m => m.name.toLowerCase() === memberName.toLowerCase());
+            const mid = memberObj ? memberObj.id : null;
+
+            if(!mid) return showToast("Anggota tidak ditemukan! Pilih dari saran.");
+
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const amt = parseInt(document.getElementById('input-amount').value.replace(/[^0-9]/g, ''));
+            const basicDesc = document.getElementById('input-desc').value.trim();
+            
+            if(isNaN(amt) || amt <= 0 || !basicDesc) return showToast("Data tidak lengkap!");
+            
+            let finalDesc = basicDesc;
+            if(manualExtraDesc) finalDesc += ` [!] ${manualExtraDesc}`;
+            
+            pendingTx = { member_id: mid, type, amount: amt, description: finalDesc };
+            
+            if(type === 'expense' && amt > 20000 && !manualExtraDesc) {
+                document.getElementById('extra-desc-title').textContent = "Detail Penarikan Besar";
+                document.getElementById('input-extra-desc').value = '';
+                document.getElementById('extra-desc-modal').classList.remove('hidden');
+            } else { submitTx(pendingTx); }
+        }
+
+        async function submitTx(tx) {
+            if(isProcessing) return;
+            isProcessing = true; const btn = document.getElementById('btn-submit-tx');
+            btn.innerText = "Menyimpan..."; btn.disabled = true;
+
+            try { 
+                const res = await fetchAPI(`${API_URL}?action=add_transaction`, { method: 'POST', body: JSON.stringify(tx) }); 
+                const r = await res.json();
+                if(r.status === 'success') {
+                    document.getElementById('form-transaksi').reset();
+                    document.getElementById('input-member-search').value = ''; document.getElementById('input-amount').value = '';
+                    manualExtraDesc = ""; pendingTx = null;
+                    document.getElementById('manual-note-indicator').classList.add('hidden');
+                    switchTab('home'); 
+                    showToast(tx.type === 'income' ? "Data kas masuk berhasil ditambahkan!" : "Data kas keluar berhasil ditambahkan!"); 
+                    await loadData(); 
+                } else { showToast(r.message); }
+            } catch(e) { showToast("Gagal menyimpan"); } 
+            finally { btn.innerText = "Simpan Transaksi"; btn.disabled = false; isProcessing = false; }
+        }
+
+        // --- NAVIGATION LOGIC ---
+        function switchTab(t) { 
+            ['home', 'members', 'add', 'notes', 'history', 'admin'].forEach(id => { 
+                const view = document.getElementById(`view-${id}`);
+                if(view) view.classList.add('hidden'); 
+                const tab = document.getElementById(`tab-${id}`); 
+                if(tab) tab.classList.replace('text-indigo-600', 'text-gray-400'); 
+            }); 
+            const targetView = document.getElementById(`view-${t}`);
+            if(targetView) targetView.classList.remove('hidden'); 
+            const targetTab = document.getElementById(`tab-${t}`); 
+            if(targetTab) targetTab.classList.replace('text-gray-400', 'text-indigo-600'); 
+        }
+
+        function showToast(m) { 
+            const t = document.getElementById('toast'); t.textContent = m; t.classList.replace('opacity-0', 'opacity-100'); 
+            setTimeout(() => t.classList.replace('opacity-100', 'opacity-0'), 2500); 
+        }
+
+        function goToTx(mid) { 
+            switchTab('add'); 
+            const m = (appData.members || []).find(x => x.id == mid);
+            if(m) document.getElementById('input-member-search').value = `${m.name}, ${m.address || 'Alamat belum diatur'}`;
+            document.getElementById('radio-expense').checked = true; 
+        }
+        function quickAction(amt, desc) { document.getElementById('radio-expense').checked = true; const el = document.getElementById('input-amount'); el.value = amt; formatCurrencyInput(el); document.getElementById('input-desc').value = desc; }
+
+        // --- CATATAN LOGIC ---
+        function openNoteInputModal() { document.getElementById('note-input-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('note-input-content').classList.remove('scale-95'), 10); }
+        function closeNoteInputModal() { document.getElementById('note-input-content').classList.add('scale-95'); setTimeout(() => document.getElementById('note-input-modal').classList.add('hidden'), 150); }
+
+        function toggleNotesView(showCompleted) {
+            showingCompletedNotes = showCompleted;
+            const btnActive = document.getElementById('btn-active-notes');
+            const btnCompleted = document.getElementById('btn-completed-notes');
+            if (showCompleted) {
+                btnCompleted.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all";
+                btnActive.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all";
+            } else {
+                btnActive.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white text-indigo-600 shadow-sm transition-all";
+                btnCompleted.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all";
+            }
+            renderNotes();
+        }
+
+        function renderNotes() {
+            if(!elNotesList) return;
+            elNotesList.innerHTML = '';
+            const notes = appData.notes || [];
+            const filteredNotes = notes.filter(n => showingCompletedNotes ? n.completed == 1 : n.completed == 0);
+
+            if (filteredNotes.length === 0) {
+                elNotesList.innerHTML = `<div class="text-center py-20 opacity-30"><svg class="mx-auto mb-4" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p class="text-sm italic">${showingCompletedNotes ? 'Belum ada riwayat catatan yang selesai.' : 'Belum ada catatan keperluan.'}</p></div>`;
+                return;
+            }
+            filteredNotes.forEach((note) => {
+                const isDone = note.completed == 1;
+                const noteTime = note.date ? formatDate(note.date) : formatDate(new Date());
+                elNotesList.innerHTML += `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm active:scale-[0.98] transition-all cursor-pointer" onclick="openNoteDetail(${note.id})">
+                        <div class="flex items-center gap-3 overflow-hidden pr-2">
+                            <div onclick="event.stopPropagation(); toggleNoteComplete(${note.id})" class="w-6 h-6 rounded-lg border-2 ${isDone ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-200'} flex items-center justify-center transition-colors">
+                                ${isDone ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4"><path d="M20 6L9 17L4 12"/></svg>' : ''}
+                            </div>
+                            <div class="truncate">
+                                <span class="text-sm font-bold text-gray-700 ${isDone ? 'line-through-fade opacity-50' : ''}">${note.title}</span>
+                                <div class="flex flex-col"><p class="text-[9px] text-gray-300 font-medium ${isDone ? 'line-through-fade' : ''}">${noteTime}</p>${note.description ? `<p class="text-[10px] text-gray-400 truncate mt-0.5 ${isDone ? 'line-through-fade opacity-30' : ''}">${note.description}</p>` : ''}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${note.description ? '<svg class="text-indigo-200" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"/></svg>' : ''}
+                            <button onclick="event.stopPropagation(); deleteNote(${note.id})" class="text-red-300 p-2 hover:bg-red-50 rounded-lg transition-colors"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        async function handleAddNote(e) {
+            e.preventDefault();
+            if (isProcessing) return;
+            const inputTitle = document.getElementById('input-note-item');
+            const inputDesc = document.getElementById('input-note-desc');
+            const title = inputTitle.value.trim(); const description = inputDesc.value.trim();
+            if (!title) return;
+
+            const btn = document.getElementById('btn-submit-note');
+            btn.innerText = "Menyimpan..."; btn.disabled = true; isProcessing = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=add_note`, { method: 'POST', body: JSON.stringify({ title, description, completed: 0 }) });
+                const r = await res.json();
+                if(r.status === 'success') { inputTitle.value = ''; inputDesc.value = ''; closeNoteInputModal(); showToast("Data catatan berhasil ditambahkan!"); await loadData(); } else { showToast(r.message); }
+            } catch (err) { showToast("Gagal simpan"); }
+            finally { btn.innerText = "Simpan Catatan"; btn.disabled = false; isProcessing = false; }
+        }
+
+        async function toggleNoteComplete(id) {
+            if(isProcessing) return;
+            const note = (appData.notes || []).find(n => n.id == id);
+            if(!note) return;
+            isProcessing = true;
+            try { await fetchAPI(`${API_URL}?action=update_note`, { method: 'POST', body: JSON.stringify({ id, completed: note.completed == 1 ? 0 : 1 }) }); await loadData(); } catch(e) {}
+            finally { isProcessing = false; }
+        }
+
+        async function deleteNote(id) {
+            if(isProcessing) return;
+            isProcessing = true;
+            try { const res = await fetchAPI(`${API_URL}?action=delete_note`, { method: 'POST', body: JSON.stringify({ id }) }); const r = await res.json(); if(r.status === 'success') showToast("Data catatan berhasil dihapus!"); else showToast(r.message); await loadData(); } catch(e) {}
+            finally { isProcessing = false; }
+        }
+
+        function openNoteDetail(id) {
+            const note = (appData.notes || []).find(n => n.id == id);
+            if(!note) return;
+            document.getElementById('edit-note-id').value = note.id;
+            document.getElementById('edit-note-title').value = note.title;
+            document.getElementById('edit-note-desc').value = note.description;
+            document.getElementById('note-detail-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('note-detail-content').classList.remove('scale-95'), 10);
+        }
+        function closeNoteDetailModal() { document.getElementById('note-detail-content').classList.add('scale-95'); setTimeout(() => document.getElementById('note-detail-modal').classList.add('hidden'), 150); }
+
+        async function saveNoteEdit() {
+            if(isProcessing) return;
+            const id = document.getElementById('edit-note-id').value;
+            const title = document.getElementById('edit-note-title').value.trim();
+            const description = document.getElementById('edit-note-desc').value.trim();
+            if(!title) return;
+
+            isProcessing = true; const btn = document.getElementById('btn-update-note'); btn.innerText = "Menyimpan..."; btn.disabled = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=update_note`, { method: 'POST', body: JSON.stringify({ id, title, description }) });
+                const r = await res.json();
+                if(r.status === 'success') { closeNoteDetailModal(); showToast("Data catatan berhasil diedit!"); await loadData(); } else { showToast(r.message); }
+            } catch(e) { showToast("Gagal simpan"); }
+            finally { btn.innerText = "Simpan Perubahan"; btn.disabled = false; isProcessing = false; }
+        }
+        function deleteNoteFromModal() { const id = document.getElementById('edit-note-id').value; deleteNote(id); closeNoteDetailModal(); }
+
+        // --- GANTI PASSWORD & PENGATURAN UMUM ---
+        function openChangePasswordModal() { closeSettingsModal(); document.getElementById('change-password-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('change-password-content').classList.remove('scale-95'), 10); }
+        function closeChangePasswordModal() { document.getElementById('change-password-content').classList.add('scale-95'); setTimeout(() => document.getElementById('change-password-modal').classList.add('hidden'), 150); }
+
+        async function handleChangePassword(e) {
+            e.preventDefault();
+            if (isProcessing) return;
+            const current_password = document.getElementById('input-old-password').value;
+            const new_password = document.getElementById('input-new-password-val').value;
+            const btn = document.getElementById('btn-submit-password');
+            btn.disabled = true; btn.innerText = "Memproses..."; isProcessing = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=change_password`, { method: 'POST', body: JSON.stringify({ current_password, new_password }) });
+                const response = await res.json();
+                if (response.status === 'success') { showToast("Password berhasil diubah!"); closeChangePasswordModal(); document.getElementById('input-old-password').value = ''; document.getElementById('input-new-password-val').value='';} else { alert("Gagal: " + response.message); }
+            } catch(err) { showToast("Gagal mengubah password"); } 
+            finally { btn.disabled = false; btn.innerText = "Simpan Password Baru"; isProcessing = false; }
+        }
+
+        function openSettingsModal() {
+            const list = document.getElementById('settings-list');
+            list.innerHTML = `
+                <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                    <p class="text-[10px] font-bold text-indigo-600 uppercase mb-3">Info Pengguna</p>
+                    <p class="font-semibold text-gray-800">@${currentUser.username}</p>
+                    <p class="text-xs text-gray-500">Role: ${currentUser.role.toUpperCase()}</p>
+                    ${currentUser.phone ? `<p class="text-xs text-gray-500 mt-1">Telp: ${currentUser.phone}</p>` : ''}
+                </div>
+            `;
+            
+            if (currentUser.can_change_password == 1 || currentUser.role === 'superadmin') {
+                list.innerHTML += `
+                    <button onclick="openChangePasswordModal()" class="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 transition-all mt-3">
+                        <span>🔐 Ubah Password Sesi Anda</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                `;
+            } else {
+                list.innerHTML += `<div class="mt-3 p-3 bg-red-50 text-red-600 text-xs rounded-xl text-center border border-red-100">🔒 Izin Ganti Password dinonaktifkan Admin.</div>`;
+            }
+            
+            list.innerHTML += `
+                <div class="bg-green-50 p-4 rounded-xl border border-green-100 mt-4">
+                    <p class="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-2">💾 Backup & Restore Database</p>
+                    <p class="text-xs text-green-600 mb-3">Ekspor / Impor seluruh data kas milik Anda (.xlsx). Data yang diimpor akan ditambahkan secara otomatis.</p>
+                    <div class="flex gap-2">
+                        <button onclick="exportFullDatabase()" class="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-xs font-bold active:scale-95 transition-all shadow-sm">Export Excel</button>
+                        <button onclick="document.getElementById('import-excel-file').click()" class="flex-1 py-2.5 bg-white text-green-700 border border-green-200 rounded-lg text-xs font-bold active:scale-95 transition-all shadow-sm">Import Excel</button>
+                    </div>
+                </div>
+            `;
+            
+            const modal = document.getElementById('settings-modal');
+            const content = document.getElementById('settings-modal-content');
+            modal.classList.remove('hidden'); setTimeout(() => content.classList.remove('scale-95'), 10);
+        }
+
+        function closeSettingsModal() { document.getElementById('settings-modal-content').classList.add('scale-95'); setTimeout(() => document.getElementById('settings-modal').classList.add('hidden'), 150); }
+
+        async function handleLogout(btn) { 
+            if(btn) {
+                btn.innerText = "Memuat...";
+                btn.disabled = true;
+            }
+            // Animasi seamless logout
+            document.body.style.transition = "opacity 0.4s ease";
+            document.body.style.opacity = "0";
+            
+            setTimeout(async () => {
+                try {
+                    await fetchAPI(`${API_URL}?action=logout`, { method: 'POST' }); 
+                } catch(e) {}
+                localStorage.clear(); 
+                window.location.href = 'login.html'; 
+            }, 400);
+        }
+
+        // --- EXPORT & IMPORT DATABASE (JSON KE EXCEL) ---
+        function exportFullDatabase() {
+            if(!window.XLSX) return showToast("Library Excel belum siap.");
+            showToast("Mengunduh Backup..."); const wb = XLSX.utils.book_new();
+            
+            const cleanMembers = (appData.members || []).map(m => ({ "Nama Anggota": m.name, "Grup": m.group_name, "Alamat": m.address, "Tanggal Dibuat": m.created_at }));
+            const cleanTxs = (appData.transactions || []).map(t => {
+                const member = (appData.members || []).find(m => m.id == t.member_id);
+                return { "Nama Anggota": member ? member.name : "Tanpa Nama", "Tipe": t.type, "Nominal": t.amount, "Deskripsi": t.description, "Tanggal": t.date };
+            });
+            const cleanNotes = (appData.notes || []).map(n => ({ "Judul Catatan": n.title, "Deskripsi": n.description, "Selesai (1/0)": n.completed, "Tanggal": n.date }));
+            
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cleanMembers), "Members"); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cleanTxs), "Transactions"); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cleanNotes), "Notes");
+            XLSX.writeFile(wb, `Backup_KasKelompok_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function importFullDatabase(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result); const workbook = XLSX.read(data, {type: 'array'});
+                    let importData = { members: [], transactions: [], notes: [] };
+                    if(workbook.SheetNames.includes("Members")) {
+                        const raw = XLSX.utils.sheet_to_json(workbook.Sheets["Members"]);
+                        importData.members = raw.map(r => ({ name: r["Nama Anggota"] || r.name, group_name: r["Grup"] || r.group_name, address: r["Alamat"] || r.address, created_at: r["Tanggal Dibuat"] || r.created_at }));
+                    }
+                    if(workbook.SheetNames.includes("Transactions")) {
+                        const raw = XLSX.utils.sheet_to_json(workbook.Sheets["Transactions"]);
+                        importData.transactions = raw.map(r => ({ member_name: r["Nama Anggota"] || r.member_name, type: r["Tipe"] || r.type, amount: r["Nominal"] || r.amount, description: r["Deskripsi"] || r.description, date: r["Tanggal"] || r.date }));
+                    }
+                    if(workbook.SheetNames.includes("Notes")) {
+                        const raw = XLSX.utils.sheet_to_json(workbook.Sheets["Notes"]);
+                        importData.notes = raw.map(r => ({ title: r["Judul Catatan"] || r.title, description: r["Deskripsi"] || r.description, completed: r["Selesai (1/0)"] || r.completed, date: r["Tanggal"] || r.date }));
+                    }
+                    if(confirm("PERINGATAN: Data dari Excel akan ditambahkan (digabungkan) ke akun Anda. Lanjutkan?")) {
+                        showToast("Memproses Import...");
+                        const res = await fetchAPI(`${API_URL}?action=import_db`, { method: 'POST', body: JSON.stringify(importData) });
+                        const result = await res.json();
+                        if(result.status === 'success') { showToast("Database Berhasil Ditambahkan!"); closeSettingsModal(); await loadData(); } else { alert("Gagal: " + result.message); }
+                    }
+                } catch(err) { alert("Gagal memproses file Excel."); }
+                document.getElementById('import-excel-file').value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- MANAGEMEN USER LOGIC DENGAN TOGGLES PERIZINAN & EDIT DETAIL (SUPERADMIN ONLY) ---
+        function renderUsers() {
+            if(!elAdminUserList) return;
+            elAdminUserList.innerHTML = '';
+
+            const users = appData.users || [];
+
+            if (users && users.length > 0) {
+                users.forEach(u => {
+                    if (u.role === 'superadmin') {
+                        elAdminUserList.innerHTML += `
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2 text-center">
+                                <h4 class="font-bold text-indigo-600 text-sm">@${u.username}</h4>
+                                <p class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">${u.role} ${u.phone ? `• Telp: ${u.phone}` : ''}</p>
+                                <p class="text-red-500 italic text-xs font-medium mt-2">Superadmin bisa diubah developer</p>
+                            </div>
+                        `;
+                    } else {
+                        const waBtn = u.phone 
+                            ? `<a href="https://wa.me/${u.phone.replace(/[^0-9]/g, '')}" target="_blank" class="p-2 text-green-600 hover:text-green-800 rounded-lg bg-green-50 hover:bg-green-100 transition-colors" title="Hubungi WA">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                               </a>` 
+                            : '';
+
+                        elAdminUserList.innerHTML += `
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                                <div class="flex justify-between items-center border-b pb-2 border-gray-100">
+                                    <div class="cursor-pointer group flex-1" onclick="openEditUserModalAdmin(${u.id})">
+                                        <h4 class="font-bold text-indigo-600 group-hover:text-indigo-800 text-sm flex items-center gap-1">
+                                            @${u.username}
+                                            <svg class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        </h4>
+                                        <p class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">${u.role} ${u.phone ? `• Telp: ${u.phone}` : ''}</p>
+                                    </div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        ${waBtn}
+                                        <button onclick="deleteUser(${u.id})" class="p-2 text-gray-400 hover:text-red-600 rounded-lg bg-gray-50 hover:bg-red-50 transition-colors">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-semibold text-gray-700">Akun Aktif</span>
+                                            <span class="text-[9px] text-gray-400">Izinkan Login</span>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" class="sr-only peer" ${u.is_active == 1 ? 'checked' : ''} onchange="toggleUserPerm(${u.id}, 'is_active', this.checked ? 1 : 0)">
+                                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-semibold text-gray-700">Izin Mengedit Data</span>
+                                            <span class="text-[9px] text-gray-400">Tambah/Ubah Kas</span>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" class="sr-only peer" ${u.can_input == 1 ? 'checked' : ''} onchange="toggleUserPerm(${u.id}, 'can_input', this.checked ? 1 : 0)">
+                                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                                        </label>
+                                    </div>
+
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-semibold text-gray-700">Izin Ganti Password</span>
+                                            <span class="text-[9px] text-gray-400">Hak mengubah pass</span>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" class="sr-only peer" ${u.can_change_password == 1 ? 'checked' : ''} onchange="toggleUserPerm(${u.id}, 'can_change_password', this.checked ? 1 : 0)">
+                                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>`;
+                    }
+                });
+            } else {
+                elAdminUserList.innerHTML = `<p class="text-xs text-gray-400 italic py-6 text-center">Hanya akun Superadmin yang memiliki otoritas memuat manajemen User.</p>`;
+            }
+        }
+
+        function openAddUserModal() { document.getElementById('add-user-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('add-user-content').classList.remove('scale-95'), 10); }
+        function closeAddUserModal() { document.getElementById('add-user-content').classList.add('scale-95'); setTimeout(() => document.getElementById('add-user-modal').classList.add('hidden'), 150); }
+
+        async function handleAddUser(e) {
+            e.preventDefault();
+            if (isProcessing) return;
+            const username = document.getElementById('input-new-username').value.trim();
+            const password = document.getElementById('input-new-password').value;
+            const phone = document.getElementById('input-new-phone').value.trim();
+            const role = document.getElementById('input-new-role').value;
+            if(!username || !password) return;
+
+            const btn = document.getElementById('btn-submit-user');
+            btn.disabled = true; btn.innerText = "Membuat..."; isProcessing = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=add_user`, { method: 'POST', body: JSON.stringify({ username, password, role, phone }) });
+                const response = await res.json();
+                if(response.status === 'success') {
+                    showToast("User berhasil dibuat!"); 
+                    document.getElementById('input-new-username').value = ''; 
+                    document.getElementById('input-new-password').value = '';
+                    document.getElementById('input-new-phone').value = '';
+                    closeAddUserModal(); await loadData();
+                } else { alert(response.message); }
+            } catch(e) { showToast("Terjadi kesalahan sistem"); } 
+            finally { btn.disabled = false; btn.innerText = "Buat User"; isProcessing = false; }
+        }
+
+        function openEditUserModalAdmin(id) {
+            const u = (appData.users || []).find(x => x.id == id);
+            if(!u) return;
+            document.getElementById('edit-user-id-admin').value = u.id;
+            document.getElementById('edit-user-username-admin').value = u.username;
+            document.getElementById('edit-user-password-admin').value = '';
+            document.getElementById('edit-user-phone-admin').value = u.phone || '';
+            
+            document.getElementById('edit-user-modal-admin').classList.remove('hidden');
+            setTimeout(() => document.getElementById('edit-user-content-admin').classList.remove('scale-95'), 10);
+        }
+
+        function closeEditUserModalAdmin() {
+            document.getElementById('edit-user-content-admin').classList.add('scale-95');
+            setTimeout(() => document.getElementById('edit-user-modal-admin').classList.add('hidden'), 150);
+        }
+
+        async function handleUpdateUserDetailAdmin(e) {
+            e.preventDefault();
+            if (isProcessing) return;
+            
+            const id = document.getElementById('edit-user-id-admin').value;
+            const username = document.getElementById('edit-user-username-admin').value.trim();
+            const password = document.getElementById('edit-user-password-admin').value;
+            const phone = document.getElementById('edit-user-phone-admin').value.trim();
+            
+            if(!username) return;
+            
+            const btn = document.getElementById('btn-submit-edit-user-admin');
+            btn.disabled = true; btn.innerText = "Menyimpan..."; isProcessing = true;
+            try {
+                const res = await fetchAPI(`${API_URL}?action=update_user_detail_admin`, {
+                    method: 'POST',
+                    body: JSON.stringify({ id, username, password, phone })
+                });
+                const response = await res.json();
+                if(response.status === 'success') {
+                    showToast("Detail user diperbarui!");
+                    closeEditUserModalAdmin();
+                    await loadData();
+                } else {
+                    alert(response.message);
+                }
+            } catch(e) {
+                showToast("Terjadi kesalahan sistem");
+            } finally {
+                btn.disabled = false; btn.innerText = "Simpan Perubahan"; isProcessing = false;
+            }
+        }
+
+        async function toggleUserPerm(id, field, value) {
+            try {
+                const res = await fetchAPI(`${API_URL}?action=update_user_perm`, {
+                    method: 'POST',
+                    body: JSON.stringify({ id, field, value })
+                });
+                const r = await res.json();
+                if (r.status === 'success') {
+                    showToast("Perizinan berhasil diperbarui");
+                } else {
+                    showToast(r.message);
+                    await loadData(); 
+                }
+            } catch (e) {
+                showToast("Gagal memperbarui izin");
+                await loadData(); 
+            }
+        }
+
+        async function deleteUser(id) {
+            if (confirm("Hapus user ini secara permanen dari server?")) {
+                try {
+                    const res = await fetchAPI(`${API_URL}?action=delete_user`, { method: 'POST', body: JSON.stringify({ id }) });
+                    const response = await res.json();
+                    if(response.status === 'success') { showToast("User berhasil dihapus"); await loadData(); } else { alert(response.message); }
+                } catch(e){}
+            }
+        }
+
+        // Eksekusi utama saat halaman siap
+        window.onload = function() {
+            cacheElements();
+            loadData();
+        };
+    </script>
+</body>
+</html>
